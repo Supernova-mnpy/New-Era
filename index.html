@@ -1,0 +1,1917 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Era</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ff6600">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="New Era">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script>
+  // Thème appliqué avant l'affichage : choix mémorisé, sinon celui de l'appareil.
+  try {
+    var t = localStorage.getItem('hotelRankings.theme');
+    if (t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('theme-dark');
+  } catch (e) {}
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --hall: #f4f5f6;
+    --hall-2: #ececec;
+    --casing: #333333;
+    --casing-2: #1f1f1f;
+    --card-face: #ffffff;
+    --ink: #333333;
+    --muted: #767676;
+    --border: #ececec;
+    --border-strong: #dcdcdc;
+    --accent: #ff6600;
+    --accent-ink: #333333;
+    --on-dark: #ffffff;
+    --danger: #b3402c;
+    --ok: #3f7a4a;
+    --shadow: 0 10px 28px rgba(20,20,20,.10);
+    --shadow-soft: 0 3px 10px rgba(20,20,20,.07);
+    --gold: #e0b13a;
+    --silver: #b9bec4;
+    --bronze: #c07a3e;
+    --medal-ink: #1f1f1f;
+  }
+  html.theme-dark {
+    color-scheme: dark;
+    --hall: #141414;
+    --hall-2: #1c1c1c;
+    --casing: #0f0f0f;
+    --casing-2: #000000;
+    --card-face: #232323;
+    --ink: #f2f2f2;
+    --muted: #a8a8a8;
+    --border: #343434;
+    --border-strong: #454545;
+    --accent: #ff7a1f;
+    --accent-ink: #1a1a1a;
+    --danger: #e2664c;
+    --ok: #5fae6f;
+    --shadow: 0 14px 32px rgba(0,0,0,.55);
+    --shadow-soft: 0 6px 16px rgba(0,0,0,.4);
+    --gold: #d9a72e;
+    --silver: #a7adb4;
+    --bronze: #b26c33;
+    --medal-ink: #141414;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Oswald', -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--hall);
+    color: var(--ink);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+  .tabular { font-family: 'Space Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  svg.icon { flex-shrink: 0; vertical-align: -2px; }
+
+  /* ---------- Toolbar & Filters ---------- */
+  .toolbar-wrapper {
+    background: var(--hall);
+    position: sticky; top: 0; z-index: 40;
+    border-bottom: 1px solid var(--border-strong);
+    padding-bottom: 12px;
+  }
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 16px 28px 0; flex-wrap: wrap; max-width: 1180px; margin: 0 auto;
+  }
+  .filters-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 1;
+  }
+  .search-input {
+    padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-strong);
+    background: var(--card-face); color: var(--ink); font-family: inherit; font-size: 13px;
+    min-width: 200px;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+  .filter-chip {
+    padding: 6px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+    cursor: pointer; background: var(--hall-2); color: var(--ink); border: 1px solid transparent;
+    transition: all 0.2s; font-family: inherit; text-transform: uppercase;
+  }
+  .filter-chip.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* ---------- Bandeau cinéma : photo du n°1 en pleine largeur ---------- */
+  .marquee {
+    position: relative; overflow: hidden;
+    background: #14100c;
+    min-height: clamp(340px, 52vh, 500px);
+    display: flex; align-items: flex-end;
+    padding: 46px 28px 34px;
+    border-bottom: 3px solid var(--accent);
+  }
+  .marquee-bg {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+    /* Cadrage poussé vers le bas : la plupart des photos de vacances ont le
+       ciel/le haut des palmiers en haut et le sujet intéressant (plage, mer,
+       transats) plus bas — on évite de couper cette partie. */
+    object-position: center 72%;
+    z-index: 0; transform-origin: 60% 60%;
+    animation: heroZoom 18s ease-in-out infinite alternate;
+  }
+  @keyframes heroZoom { from { transform: scale(1); } to { transform: scale(1.18); } }
+  .marquee-scrim {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      linear-gradient(100deg, rgba(12,9,6,.92) 0%, rgba(12,9,6,.72) 42%, rgba(12,9,6,.30) 72%, rgba(12,9,6,.45) 100%),
+      linear-gradient(0deg, rgba(12,9,6,.75) 0%, transparent 45%);
+  }
+  @media (prefers-reduced-motion: reduce) { .marquee-bg { animation: none; } }
+  .marquee-inner {
+    position: relative; z-index: 2;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 36px; flex-wrap: wrap;
+    max-width: 1180px; margin: 0 auto; width: 100%;
+  }
+  .marquee-text { flex: 1 1 360px; min-width: 280px; }
+  .board-byline {
+    display: block; font-size: 18px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .board-title {
+    margin: 0; font-size: clamp(36px, 7vw, 68px); font-weight: 700; letter-spacing: -.005em;
+    text-transform: uppercase; color: var(--on-dark); line-height: .96;
+    text-shadow: 0 2px 24px rgba(0,0,0,.45);
+    display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  }
+  .badge-5star {
+    font-size: clamp(14px, 2.5vw, 20px); font-family: 'Space Mono', monospace; font-weight: 700;
+    color: var(--gold); border: 2px solid var(--gold); border-radius: 999px; padding: 4px 12px;
+    letter-spacing: 0; text-shadow: none; white-space: nowrap; align-self: center; margin-top: 4px;
+  }
+  .board-sub { margin: 12px 0 0; font-size: 13.5px; color: rgba(255,255,255,.78); max-width: 480px; }
+  .board-readout {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12.5px; text-transform: uppercase;
+    padding: 7px 14px; border-radius: 999px; letter-spacing: .02em; white-space: nowrap;
+    margin-top: 18px;
+  }
+
+  /* Crédit : quel hôtel est en vitrine */
+  .hero-credit {
+    flex: 0 0 auto; text-align: right; color: var(--on-dark); padding-bottom: 4px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--gold); color: var(--medal-ink); border-radius: 999px; padding: 5px 12px;
+    font-family: 'Space Mono', monospace; font-weight: 700; font-size: 11.5px; line-height: 1;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
+  .hero-badge span.hb-label { font-family: 'Oswald', sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+  .hero-caption strong { display: block; font-size: 19px; font-weight: 700; text-shadow: 0 2px 12px rgba(0,0,0,.5); }
+  .hero-caption span { display: block; font-size: 12px; opacity: .8; margin-top: 2px; }
+  @media (max-width: 720px) {
+    .marquee { min-height: 300px; }
+    .marquee-inner { flex-direction: column; align-items: stretch; gap: 20px; }
+    .marquee-text { flex: none; }
+    .hero-credit { align-items: flex-start; text-align: left; }
+  }
+
+  /* ---------- Boutons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    border-radius: 10px; font-size: 12.5px; font-weight: 600; letter-spacing: .03em; cursor: pointer;
+    padding: 9px 15px; border: 1px solid var(--border-strong); background: var(--card-face); color: var(--ink);
+    box-shadow: var(--shadow-soft);
+    transition: transform .12s ease, box-shadow .12s ease;
+    font-family: inherit; text-transform: uppercase;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); box-shadow: none; }
+  .btn.ghost.danger:hover { color: var(--danger); border-color: var(--danger); }
+  .btn.primary { background: var(--casing); color: #fff; border-color: var(--casing); }
+  .btn.primary:hover { background: var(--casing-2); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+  #showcaseBtn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { #showcaseBtn { display: none; } }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    display: grid; grid-template-columns: 1.5fr 1fr; gap: 22px;
+    padding: 20px 28px 44px; align-items: start; max-width: 1180px; margin: 0 auto;
+  }
+  @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
+
+  .section-title { margin: 0 0 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .section-title strong { color: var(--ink); }
+
+  .podium-section {
+    background: color-mix(in srgb, var(--accent) 6%, var(--card-face));
+    border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+    border-radius: 22px;
+    padding: 22px 20px 24px;
+    margin-bottom: 36px;
+  }
+  .podium-heading {
+    display: flex; align-items: center; gap: 9px; margin: 0 0 3px;
+    font-size: 19px; font-weight: 700; text-transform: uppercase; letter-spacing: .02em; color: var(--ink);
+  }
+  .podium-heading svg { color: var(--accent); flex-shrink: 0; }
+  .podium-sub { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+  /* Podium : composant à part entière, volontairement différent des fiches de la liste.
+     Les 3 tuiles ont des hauteurs inégales et l'or passe au centre. */
+  .podium { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: end; }
+  .pod {
+    position: relative; border-radius: 18px; overflow: hidden; cursor: pointer;
+    box-shadow: var(--shadow); background: var(--hall-2);
+    border: none; padding: 0; width: 100%; text-align: left; font-family: inherit; color: var(--on-dark);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .pod:hover { transform: translateY(-4px); box-shadow: 0 18px 38px rgba(20,20,20,.22); }
+  .pod:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .pod-c { order: 2; height: 322px; }
+  .pod-l { order: 1; height: 262px; }
+  .pod-r { order: 3; height: 262px; }
+  .pod img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(.9) contrast(1.05); }
+  .pod-scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(0deg, rgba(10,8,4,.92) 0%, rgba(10,8,4,.55) 38%, rgba(10,8,4,.05) 72%, transparent 100%);
+  }
+  .pod-medal {
+    position: absolute; top: 12px; left: 12px; z-index: 2;
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace; font-weight: 700; font-size: 14px;
+    border: 2px solid rgba(255,255,255,.85); box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  }
+  .pod-1 .pod-medal { background: var(--gold);   color: var(--medal-ink); }
+  .pod-2 .pod-medal { background: var(--silver); color: var(--medal-ink); }
+  .pod-3 .pod-medal { background: var(--bronze); color: #fff; }
+  .pod-body { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 14px 14px 13px; }
+  .pod-score {
+    font-family: 'Space Mono', monospace; font-weight: 700; line-height: 1;
+    font-size: 26px; color: var(--on-dark); text-shadow: 0 2px 12px rgba(0,0,0,.6);
+  }
+  .pod-c .pod-score { font-size: 32px; }
+  .pod-name {
+    margin: 6px 0 2px; font-size: 15px; font-weight: 700; line-height: 1.15;
+    text-shadow: 0 2px 10px rgba(0,0,0,.55);
+  }
+  .pod-c .pod-name { font-size: 17px; }
+  .pod-city { font-size: 11.5px; opacity: .82; display: flex; align-items: center; gap: 4px; }
+  @media (max-width: 720px) {
+    .podium { grid-template-columns: 1fr; }
+    .pod, .pod-c, .pod-l, .pod-r { order: 0; height: 210px; }
+  }
+
+  .full-list-heading {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding-top: 22px; margin-bottom: 14px; border-top: 1px dashed var(--border-strong);
+  }
+
+  .map-panel {
+    position: sticky; top: 16px;
+    background: var(--card-face); border-radius: 18px;
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  .map-panel .map-label {
+    color: var(--ink); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 16px 16px 10px;
+  }
+  #map { height: 440px; width: 100%; background: var(--hall-2); }
+  #map .leaflet-tile { filter: saturate(1.1) contrast(1.03); }
+  @media (max-width: 940px) { .map-panel { position: static; } #map { height: 300px; } }
+  .map-pin {
+    background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,.3); border: 2px solid #fff;
+    font-family: 'Space Mono', monospace;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .pin-hot .map-pin {
+    transform: scale(1.35);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent), 0 3px 8px rgba(0,0,0,.3);
+  }
+  @media (prefers-reduced-motion: reduce) { .map-pin { transition: none; } }
+  .leaflet-popup-content-wrapper { background: var(--card-face); color: var(--ink); border-radius: 10px; }
+  .leaflet-popup-tip { background: var(--card-face); }
+  .leaflet-popup-content { font-family: 'Oswald', sans-serif; min-width: 190px; }
+  .popup-hotel {
+    display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 12.5px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .popup-hotel:last-child { border-bottom: none; }
+  .popup-hotel a { color: var(--ink); text-decoration: none; font-weight: 600; }
+  .popup-hotel a:hover { color: var(--accent); }
+  .popup-hotel span { font-family: 'Space Mono', monospace; }
+
+  /* ---------- Hotel card ---------- */
+  .cards-grid { display: grid; gap: 16px; }
+  .hotel-card {
+    position: relative;
+    display: flex; background: var(--card-face); color: var(--ink);
+    border-radius: 18px; box-shadow: var(--shadow); overflow: hidden;
+    scroll-margin-top: 16px;
+    transition: outline-color .3s ease, background .3s ease, transform .15s ease;
+    outline: 0 solid var(--accent);
+  }
+  .hotel-card.highlight { outline-width: 3px; }
+  .hotel-card:hover { transform: translateY(-2px); }
+  @media (max-width: 620px) { .hotel-card { flex-direction: column; } }
+
+  @keyframes cardIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .card-in { animation: cardIn .45s cubic-bezier(.16,1,.3,1) backwards; }
+  @media (prefers-reduced-motion: reduce) { .card-in { animation: none; } }
+
+  .hc-media { position: relative; width: 240px; flex-shrink: 0; background: var(--hall-2); }
+  /* Les photos viennent de sources hétérogènes : on les harmonise pour qu'elles forment une série. */
+  .hc-media img { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(.9) contrast(1.05); }
+  .hc-media::after {
+    content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      linear-gradient(0deg, rgba(10,8,4,.42) 0%, rgba(10,8,4,.08) 42%, transparent 70%),
+      linear-gradient(120deg, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 55%);
+  }
+  .hc-media .emoji-fallback {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    color: var(--muted); background: var(--hall-2);
+  }
+  @media (max-width: 620px) { .hc-media { width: 100%; height: 170px; } }
+
+  .hc-ribbon {
+    position: absolute; top: 14px; left: 0; z-index: 3;
+    background: var(--accent); color: var(--accent-ink);
+    padding: 6px 16px 6px 12px; font-weight: 700; font-size: 12px; letter-spacing: .02em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 6px;
+    clip-path: polygon(0 0, 100% 0, 88% 50%, 100% 100%, 0 100%);
+    box-shadow: 0 3px 10px rgba(0,0,0,.25);
+    font-family: 'Space Mono', monospace;
+  }
+  .hc-ribbon .hc-ribbon-label { font-family: 'Oswald', sans-serif; }
+  .hc-ribbon.rank-1 { background: var(--gold);   color: var(--medal-ink); }
+  .hc-ribbon.rank-2 { background: var(--silver); color: var(--medal-ink); }
+  .hc-ribbon.rank-3 { background: var(--bronze); color: #fff; }
+
+  .hc-score {
+    position: absolute; top: 16px; right: 16px; z-index: 2;
+    background: var(--accent); color: var(--accent-ink); border-radius: 10px;
+    padding: 8px 12px; text-align: center; min-width: 56px;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .hc-score-num { display: block; font-family: 'Space Mono', monospace; font-size: 19px; font-weight: 700; line-height: 1; }
+  .hc-score-word { display: block; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-top: 3px; }
+
+  .hc-body { flex: 1; min-width: 0; padding: 18px 20px; display: flex; flex-direction: column; }
+  .hc-name { margin: 0 0 4px; font-size: 17px; font-weight: 700; padding-right: 70px; }
+  .hc-name a { color: inherit; text-decoration: none; }
+  .hc-name a:hover { text-decoration: underline; }
+  .hc-city {
+    display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12.5px; margin-bottom: 12px;
+  }
+  .hc-tags { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 4px; }
+  .hc-tag {
+    background: var(--hall-2); color: var(--ink); font-size: 11.5px; font-weight: 600;
+    padding: 5px 12px; border-radius: 999px;
+  }
+  details.hc-manifest { margin-top: 8px; }
+  details.hc-manifest summary {
+    cursor: pointer; font-size: 11.5px; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: .05em;
+  }
+  details.hc-manifest summary:hover { color: var(--ink); }
+  .crit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 7px 16px; margin-top: 9px; font-size: 12px; }
+  .crit-grid div { display: flex; flex-wrap: wrap; justify-content: space-between; border-bottom: 1px dotted var(--border); padding-bottom: 3px; }
+  .crit-grid div span:first-child { color: var(--muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .04em; }
+  .crit-grid div span:nth-child(2) { font-family: 'Space Mono', monospace; font-weight: 700; }
+  .radar { display: block; width: 100%; height: auto; overflow: visible; }
+  .rd-ring { fill: none; stroke: var(--border-strong); stroke-width: .7; }
+  .rd-axis { stroke: var(--border-strong); stroke-width: .6; }
+  .rd-shape {
+    fill: color-mix(in srgb, var(--accent) 28%, transparent);
+    stroke: var(--accent); stroke-width: 2; stroke-linejoin: round;
+  }
+  .rd-label {
+    font-size: 9px; font-weight: 700; fill: var(--muted); letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .crit-panel { display: flex; gap: 14px; align-items: center; margin-top: 9px; }
+  .crit-panel .radar-wrap { flex: 0 0 108px; }
+  .crit-panel .crit-grid { flex: 1 1 auto; margin-top: 0; }
+  @media (max-width: 620px) { .crit-panel { flex-direction: column; } .crit-panel .radar-wrap { flex: none; width: 130px; } }
+
+  .crit-bar {
+    flex: 0 0 100%; height: 4px; margin-top: 4px; border-radius: 3px;
+    background: linear-gradient(to right,
+      var(--accent) 0 var(--w),
+      color-mix(in srgb, var(--ink) 12%, transparent) var(--w) 100%);
+  }
+
+  .hc-facts { margin-top: 9px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+  .hc-fact { display: flex; gap: 6px; }
+  .hc-fact .hc-fact-label { color: var(--muted); flex-shrink: 0; }
+
+  .hc-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 14px; flex-wrap: wrap; }
+  .hc-secondary { display: flex; gap: 16px; }
+  .hc-secondary button {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: none; border: none; color: var(--muted); font-size: 11.5px; font-weight: 600;
+    padding: 0; cursor: pointer; font-family: inherit;
+  }
+  .hc-secondary button:hover { color: var(--ink); }
+  .hc-secondary button.del:hover { color: var(--danger); }
+  .hc-cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--casing); color: #fff; border: none; border-radius: 10px;
+    padding: 10px 16px; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em;
+    cursor: pointer; font-family: inherit;
+  }
+  .hc-cta:hover { background: var(--casing-2); }
+
+  .empty-state {
+    border: 2px dashed var(--border-strong); border-radius: 18px; padding: 34px 20px; text-align: center;
+    color: var(--muted); font-size: 13px; letter-spacing: .02em; background: var(--card-face);
+  }
+  .empty-state strong { display: block; color: var(--ink); font-size: 15px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .06em; }
+
+  /* ---------- FAB ---------- */
+  .fab {
+    position: fixed; right: 26px; bottom: 26px; width: 54px; height: 54px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow); z-index: 50;
+  }
+  .fab:hover { filter: brightness(.94); transform: translateY(-1px); }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(20,20,20,.55); display: none;
+    align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card-face); color: var(--ink); border-radius: 18px; width: 100%; max-width: 460px;
+    max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
+  }
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 22px; border-bottom: 1px solid var(--border);
+  }
+  .modal h2 { margin: 0; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  .modal-head button.x { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1; }
+  .modal-head button.x:hover { color: var(--ink); }
+  form#hotelForm { padding: 20px 22px 22px; }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 6px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .08em;
+  }
+  .field input[type=text], .field input[type=url] {
+    width: 100%; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 8px;
+    background: var(--hall); color: var(--ink); font-family: inherit;
+  }
+  .field input[type=text]:focus, .field input[type=url]:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .photo-upload {
+    display: flex; align-items: center; gap: 12px; border: 1px dashed var(--border-strong); border-radius: 10px;
+    padding: 10px; background: var(--hall);
+  }
+  .photo-upload .thumb {
+    width: 52px; height: 52px; border-radius: 8px; object-fit: cover; background: var(--border);
+    display: none; flex-shrink: 0;
+  }
+  .photo-upload .thumb.show { display: block; }
+  .photo-upload .upload-actions { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .photo-upload input[type=file] { font-size: 12px; max-width: 100%; }
+  .photo-upload .remove-photo {
+    align-self: flex-start; font-size: 11.5px; color: var(--muted); background: none; border: none;
+    cursor: pointer; padding: 0; text-decoration: underline; display: none; font-family: inherit;
+  }
+  .photo-upload .remove-photo.show { display: inline; }
+  .photo-hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .slider-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .slider-row output { width: 30px; text-align: right; font-weight: 700; font-size: 13px; font-family: 'Space Mono', monospace; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; }
+  .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider-pill {
+    position: absolute; inset: 0; background: var(--border-strong); border-radius: 999px; cursor: pointer; transition: .15s;
+  }
+  .slider-pill::before {
+    content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: .15s;
+  }
+  .switch input:checked + .slider-pill { background: var(--accent); }
+  .switch input:checked + .slider-pill::before { transform: translateX(18px); }
+  #adultLabel { font-size: 12.5px; font-weight: 600; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+  .status { font-size: 12px; margin-top: 10px; min-height: 16px; font-weight: 600; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--danger); }
+
+  /* Lecture seule : les commandes d'édition n'apparaissent qu'aux éditeurs connectés.
+     (La vraie protection est dans la base de données ; ceci n'est que l'affichage.) */
+  body:not(.can-edit) .edit-only { display: none !important; }
+  .field input[type=email], .field input[type=password] {
+    width: 100%; font-size: 16px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 8px;
+    background: var(--hall); color: var(--ink); font-family: inherit;
+  }
+
+  /* ---------- Story Modal ---------- */
+  .story-modal {
+    position: relative; width: 100%; max-width: 500px; height: 80vh; max-height: 800px;
+    background: #000; border-radius: 22px; overflow: hidden; box-shadow: 0 24px 46px rgba(0,0,0,.5);
+    color: #fff;
+  }
+  .story-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.8; }
+  .story-scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.8) 70%, rgba(0,0,0,0.95) 100%);
+  }
+  .story-close {
+    position: absolute; top: 16px; right: 16px; z-index: 10;
+    background: rgba(0,0,0,0.4); border: none; color: #fff; font-size: 24px;
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer; backdrop-filter: blur(4px);
+  }
+  .story-content {
+    position: absolute; inset: 0; padding: 30px; display: flex; flex-direction: column; justify-content: flex-end; z-index: 2;
+  }
+  .story-rank { font-family: 'Space Mono', monospace; font-size: 24px; font-weight: 700; color: var(--gold); text-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .story-name { font-size: 32px; font-weight: 700; line-height: 1.1; margin: 4px 0; text-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .story-city { font-size: 14px; opacity: 0.9; margin-bottom: 20px; }
+  .story-radar-wrap { width: 140px; margin: 0 auto 20px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4)); }
+  .story-tags { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+
+  /* ---------- Versus Modal ---------- */
+  .versus-modal { max-width: 600px; }
+  .versus-content { padding: 20px; }
+  .versus-hotels { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .vs-side { flex: 1; text-align: center; }
+  .vs-side img { width: 80px; height: 80px; border-radius: 12px; object-fit: cover; margin-bottom: 8px; }
+  .vs-side-name { font-weight: 700; font-size: 14px; }
+  .vs-center { font-weight: 700; font-size: 16px; color: var(--accent); font-family: 'Space Mono', monospace; }
+  .versus-radar-wrap { max-width: 280px; margin: 0 auto; position: relative; }
+  /* Superposed radar styling */
+  .vs-radar-1 { stroke: var(--accent); fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .vs-radar-2 { stroke: #3b82f6; fill: color-mix(in srgb, #3b82f6 30%, transparent); }
+  .vs-radar-1, .vs-radar-2 { stroke-width: 2; stroke-linejoin: round; }
+
+  /* Checkbox for versus selection */
+  .vs-checkbox-wrap { position: absolute; top: 12px; right: 12px; z-index: 10; }
+  .vs-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: var(--accent); }
+  /* Téléphone : la note passe en haut à droite de la photo, la case descend ;
+     et la barre d'outils ne colle plus en haut (elle mangerait un tiers de l'écran). */
+  @media (max-width: 620px) { .vs-checkbox-wrap { top: auto; bottom: 12px; } }
+  @media (max-width: 720px) { .toolbar-wrapper { position: static; } }
+  
+  /* FAB for Versus Mode */
+  .fab-vs {
+    position: fixed; right: 90px; bottom: 26px; width: 54px; height: 54px; border-radius: 50%;
+    background: var(--casing); color: #fff; border: none; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    box-shadow: var(--shadow); z-index: 50;
+  }
+  .fab-vs.show { display: flex; }
+  /* ---------- Announcement Modal ---------- */
+  #announcementModalOverlay { z-index: 200; background: #000; }
+  .announcement-content { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; }
+  .announcement-bg-wrap { position: absolute; inset: 0; opacity: 0; transition: opacity 1.5s ease; }
+  .announcement-bg-wrap.show { opacity: 0.5; }
+  .announcement-bg { width: 100%; height: 100%; object-fit: cover; }
+  .announcement-scrim { position: absolute; inset: 0; background: radial-gradient(circle at center, rgba(0,0,0,0.5) 0%, #000 80%); }
+  
+  .announce-phase-1 { display: flex; flex-direction: column; align-items: center; gap: 20px; z-index: 2; transition: opacity 0.5s; }
+  .spinner { width: 50px; height: 50px; border: 4px solid rgba(255,255,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .announce-text { font-family: 'Space Mono', monospace; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); }
+  
+  .announce-phase-2 { display: none; flex-direction: column; align-items: center; z-index: 2; opacity: 0; }
+  .announce-phase-2.fadeIn { animation: fadeIn 0.8s forwards; }
+  @keyframes fadeIn { to { opacity: 1; } }
+  .announce-header { font-size: 20px; text-transform: uppercase; letter-spacing: 0.2em; color: var(--gold); margin-bottom: 20px; font-weight: 700; text-shadow: 0 2px 10px rgba(0,0,0,0.8); }
+  .announce-radar-wrap { width: 220px; filter: drop-shadow(0 0 20px rgba(255,102,0,0.4)); margin-bottom: 20px; }
+  .announce-rank-stamp { 
+    font-family: 'Space Mono', monospace; font-size: 140px; font-weight: 700; line-height: 1;
+    color: #fff; text-shadow: 0 10px 40px rgba(0,0,0,0.8); margin: -30px 0 20px;
+    opacity: 0; transform: scale(3);
+  }
+  .announce-rank-stamp.stamp-in { animation: stampIn 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+  @keyframes stampIn { to { opacity: 1; transform: scale(1) rotate(-4deg); } }
+  
+  .announce-name { font-size: 42px; font-weight: 700; text-transform: uppercase; text-shadow: 0 4px 12px rgba(0,0,0,0.8); margin-bottom: 30px; }
+  
+  /* Animer le SVG Radar au dessin */
+  .announce-radar-wrap .rd-shape { stroke-dasharray: 400; stroke-dashoffset: 400; fill: transparent; }
+  .announce-phase-2.fadeIn .announce-radar-wrap .rd-shape { animation: drawRadar 1.5s ease-out forwards; }
+  @keyframes drawRadar { 70% { fill: transparent; } 100% { stroke-dashoffset: 0; fill: color-mix(in srgb, var(--accent) 28%, transparent); } }
+  
+  .confetti-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+</style>
+</head>
+<body>
+
+<header class="marquee">
+  <img class="marquee-bg" id="heroPhotoImg" src="" alt="" aria-hidden="true">
+  <div class="marquee-scrim" aria-hidden="true"></div>
+  <div class="marquee-inner">
+    <div class="marquee-text">
+      <span class="board-byline">Les Amangelos</span>
+      <h1 class="board-title">New Era <span class="badge-5star">★ 5 ÉTOILES</span></h1>
+      <p class="board-sub">Bienvenue dans notre New Era ! Le concept ? Notre quête pour dénicher la crème de la crème des hôtels. Piscine, service, emplacement, gastronomie, confort des chambres : on passe tout au crible pour établir le classement ultime. Régalez-vous ;)</p>
+      <div class="board-readout" id="countLabel">8 hôtels</div>
+    </div>
+    <div class="hero-credit" id="heroCredit">
+      <div class="hero-badge"><span class="tabular">#1</span><span class="hb-label">Top choix</span></div>
+      <div class="hero-caption">
+        <strong id="heroName"></strong>
+        <span id="heroCity"></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="toolbar-wrapper">
+  <div class="toolbar">
+    <div class="filters-bar">
+      <input type="text" id="searchInput" class="search-input" placeholder="Rechercher un hôtel ou une ville...">
+      <button class="filter-chip" id="filterAdults">Adults Only</button>
+      <button class="filter-chip" id="filterTopScore">Score ≥ 8.5</button>
+    </div>
+    <div class="toolbar-actions">
+      <button class="btn ghost" id="themeBtn" aria-label="Basculer le thème">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="btn ghost" id="showcaseBtn" aria-pressed="false">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4.5 18 12 6 19.5Z"/></svg>
+        <span id="showcaseLabel">Mode vitrine</span>
+      </button>
+      <button class="btn ghost" id="exportBtn">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19.5h16"/></svg>
+        Exporter en Excel
+      </button>
+      <button class="btn ghost edit-only" id="importBtn" title="Importer la sauvegarde JSON de l'ancienne version">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 19.5h16"/></svg>
+        Importer
+      </button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <button class="btn ghost" id="authBtn">
+        <svg class="icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        <span id="authLabel">Connexion</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div>
+    <div class="podium-section">
+      <h2 class="podium-heading">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 5H4a1 1 0 0 0-1 1c0 2.5 1.8 4.5 4.2 4.9"/><path d="M17 5h3a1 1 0 0 1 1 1c0 2.5-1.8 4.5-4.2 4.9"/></svg>
+        Top 3 du classement
+      </h2>
+      <p class="podium-sub">Les mieux notés de la sélection en ce moment.</p>
+      <div class="podium" id="podium"></div>
+    </div>
+
+    <div class="full-list-heading">
+      <h2 class="section-title"><strong>Classement</strong> complet</h2>
+    </div>
+    <div class="cards-grid" id="cards"></div>
+  </div>
+  <div class="map-panel">
+    <div class="map-label">Carte</div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<button class="fab edit-only" id="fabAdd" title="Ajouter un hôtel" aria-label="Ajouter un hôtel">
+  <svg class="icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v16M4 12h16"/></svg>
+</button>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Ajouter un hôtel</h2>
+      <button class="x" id="modalClose" aria-label="Fermer">×</button>
+    </div>
+    <form id="hotelForm">
+      <input type="hidden" id="f-id">
+      <div class="field">
+        <label>Nom de l'hôtel</label>
+        <input type="text" id="f-name" required>
+      </div>
+      <div class="field">
+        <label>Ville</label>
+        <input type="text" id="f-city" required placeholder="ex : Agadir">
+      </div>
+      <div class="field">
+        <label>Site officiel (optionnel)</label>
+        <input type="url" id="f-website" placeholder="https://...">
+      </div>
+      <div class="field">
+        <label>Point fort (optionnel)</label>
+        <input type="text" id="f-point-fort" placeholder="ex : Piscine magnifique">
+      </div>
+      <div class="field">
+        <label>Point faible (optionnel)</label>
+        <input type="text" id="f-point-faible" placeholder="ex : Service lent au petit-déj">
+      </div>
+      <div class="field">
+        <label>Photo de l'hôtel</label>
+        <input type="hidden" id="f-photo">
+        <div class="photo-upload">
+          <img id="photoThumb" class="thumb" alt="">
+          <div class="upload-actions">
+            <input type="file" id="f-photo-file" accept="image/*">
+            <button type="button" class="remove-photo" id="removePhotoBtn">Retirer la photo</button>
+          </div>
+        </div>
+        <div class="photo-hint">Sans photo, une image de secours est choisie automatiquement.</div>
+      </div>
+      <div class="field"><label>Piscine</label>
+        <div class="slider-row"><input type="range" id="f-pool" min="0" max="10" step="0.5" value="7"><output id="o-pool">7</output></div></div>
+      <div class="field"><label>Service</label>
+        <div class="slider-row"><input type="range" id="f-service" min="0" max="10" step="0.5" value="7"><output id="o-service">7</output></div></div>
+      <div class="field"><label>Emplacement</label>
+        <div class="slider-row"><input type="range" id="f-location" min="0" max="10" step="0.5" value="7"><output id="o-location">7</output></div></div>
+      <div class="field"><label>Restauration</label>
+        <div class="slider-row"><input type="range" id="f-food" min="0" max="10" step="0.5" value="7"><output id="o-food">7</output></div></div>
+      <div class="field"><label>Chambre</label>
+        <div class="slider-row"><input type="range" id="f-bedroom" min="0" max="10" step="0.5" value="7"><output id="o-bedroom">7</output></div></div>
+      <div class="field">
+        <label>Adultes seulement</label>
+        <div class="toggle-row">
+          <label class="switch"><input type="checkbox" id="f-adult"><span class="slider-pill"></span></label>
+          <span id="adultLabel">Non</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" id="cancelBtn">Annuler</button>
+        <button type="submit" class="btn primary" id="submitBtn">Ajouter</button>
+      </div>
+      <div class="status" id="formStatus"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="loginModalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Connexion éditeur</h2>
+      <button class="x" id="loginClose" aria-label="Fermer">×</button>
+    </div>
+    <form id="loginForm" style="padding: 20px 22px 22px;">
+      <div class="field">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="loginPassword">Mot de passe</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </div>
+      <p class="photo-hint">Réservé aux éditeurs.</p>
+      <div class="modal-actions">
+        <button type="submit" class="btn primary" id="loginSubmit">Se connecter</button>
+      </div>
+      <div class="status" id="loginStatus"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="storyModalOverlay">
+  <div class="story-modal">
+    <button class="story-close" id="storyClose" aria-label="Fermer">×</button>
+    <img id="storyImg" src="" alt="" class="story-bg">
+    <div class="story-scrim"></div>
+    <div class="story-content">
+      <div class="story-rank" id="storyRank"></div>
+      <h2 class="story-name" id="storyName"></h2>
+      <div class="story-city" id="storyCity"></div>
+      <div class="story-radar-wrap" id="storyRadar"></div>
+      <div class="story-tags" id="storyTags"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="versusModalOverlay">
+  <div class="modal versus-modal">
+    <div class="modal-head">
+      <h2>Mode Versus</h2>
+      <button class="x" id="versusClose" aria-label="Fermer">×</button>
+    </div>
+    <div class="versus-content">
+      <div class="versus-hotels">
+        <div class="vs-side" id="vsLeft"></div>
+        <div class="vs-center">VS</div>
+        <div class="vs-side" id="vsRight"></div>
+      </div>
+      <div class="versus-radar-wrap" id="vsRadarWrap"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="announcementModalOverlay">
+  <div class="announcement-content">
+    <div class="announcement-bg-wrap">
+      <img id="announceImg" src="" alt="" class="announcement-bg">
+      <div class="announcement-scrim"></div>
+    </div>
+    
+    <div class="announce-phase-1" id="announcePhase1">
+      <div class="spinner"></div>
+      <div class="announce-text">Analyse des critères en cours...</div>
+    </div>
+    
+    <div class="announce-phase-2" id="announcePhase2">
+      <div class="announce-header" id="announceHeader">Nouvel Entrant !</div>
+      <div class="announce-radar-wrap" id="announceRadarWrap"></div>
+      <div class="announce-rank-stamp" id="announceRankStamp"></div>
+      <h2 class="announce-name" id="announceName"></h2>
+      <button class="hc-cta announce-btn" id="announceBtn" style="transform: scale(1.1);">Découvrir le classement</button>
+    </div>
+  </div>
+  <canvas id="confettiCanvas" class="confetti-canvas"></canvas>
+</div>
+
+<button class="fab-vs" id="fabVs" title="Comparer" aria-label="Comparer">
+  <svg class="icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 21l6-6M9 8l-5 5 5 5M4 13h10"/></svg>
+</button>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // Supabase > Project Settings > API : l'URL du projet et la clé "publishable" (publique par conception :
+  // la sécurité vient des règles de la base, pas du secret de cette clé).
+  var SUPABASE_URL = 'https://kgtswuksgyrggctucprb.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_Flw8Pnu9oS27WGvy88Lj-A_cRVsQnSj';
+  var CATEGORY = 'hotel'; // la future section Airbnb utilisera 'airbnb'
+  var COORD_CACHE_KEY = 'hotelRankings.cityCoords';
+
+  var configured = /^https:\/\//.test(SUPABASE_URL);
+  var db = configured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+  var canEdit = false;
+
+  var DEFAULT_COORDS = {
+    'agadir': [30.4278, -9.5981],
+    'olbia': [40.9236, 9.4989],
+    'corfou': [39.6243, 19.9217],
+    'corfu': [39.6243, 19.9217],
+    'gran canaria': [28.1235, -15.4363],
+    'rhodes': [36.4341, 28.2176],
+    'marrakech': [31.6295, -7.9811],
+    'lanzarote': [28.9636, -13.5477]
+  };
+
+  var FALLBACK_PHOTOS = [
+    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&q=70&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=1600&q=70&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1600&q=70&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1540541338287-41700207dee6?w=1600&q=70&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?w=1600&q=70&auto=format&fit=crop'
+  ];
+
+  var ICON_PIN = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.58 7-12a7 7 0 1 0-14 0c0 4.42 7 12 7 12Z"/><circle cx="12" cy="9" r="2.3"/></svg>';
+  var ICON_PENCIL = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="M14 6.5 17.5 10"/></svg>';
+  var ICON_TRASH = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M6.5 7 7.3 20a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9L17.5 7"/><path d="M10 11v6M14 11v6"/></svg>';
+  var ICON_PHOTO = '<svg class="icon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><circle cx="8.5" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3L17 11l3.5 3.5"/></svg>';
+  var ICON_LINK = '<svg class="icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14 20 4"/><path d="M14 4h6v6"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>';
+
+  var hotels = [];
+  var cityCoords = {};
+  var map, markersLayer;
+  var cityMarkers = {};
+  var didFirstRender = false;
+  var overviewBounds = [];
+  var mapLockUntil = 0;   // suspend le suivi après un "Voir sur la carte" explicite
+  var hoverCity = null;   // ville désignée par la souris
+  var scrollCity = null;  // ville désignée par la lecture
+  var cardObserver = null, centeredCards = [], flyTimer = 0;
+
+  /* ---------- Base de données ---------- */
+  // L'écran garde la forme historique d'un hôtel ; la base range les notes dans `scores`.
+  var SCORE_KEYS = ['pool', 'service', 'location', 'food', 'bedroom'];
+  function fromRow(r) {
+    var h = {
+      id: r.id, name: r.name, city: r.city, website: r.website, pointFort: r.point_fort,
+      pointFaible: r.point_faible, photo: r.photo_url, adultOnly: r.adult_only ? 'Y' : 'N'
+    };
+    SCORE_KEYS.forEach(function (k) { h[k] = Number((r.scores || {})[k]) || 0; });
+    return h;
+  }
+  function toRow(h) {
+    var scores = {};
+    SCORE_KEYS.forEach(function (k) { scores[k] = Number(h[k]) || 0; });
+    return {
+      category: CATEGORY, name: h.name, city: h.city, website: h.website || '',
+      point_fort: h.pointFort || '', point_faible: h.pointFaible || '', photo_url: h.photo || '',
+      scores: scores, adult_only: h.adultOnly === 'Y'
+    };
+  }
+
+  var loading = true, loadError = '';
+  function loadHotels() {
+    if (!db) { loading = false; loadError = 'Appli pas encore reliée à sa base de données (voir MISE-EN-LIGNE.md).'; renderAll(); return Promise.resolve(); }
+    return db.from('places').select('*').eq('category', CATEGORY).then(function (res) {
+      loading = false;
+      if (res.error) { loadError = 'Impossible de charger le classement. Vérifie ta connexion puis recharge la page.'; }
+      else { loadError = ''; hotels = res.data.map(fromRow); }
+      renderAll();
+    });
+  }
+
+  // Photo compressée (data URL) -> fichier dans le dossier "photos" -> adresse publique.
+  function uploadPhoto(dataUrl) {
+    var path = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)) + '.jpg';
+    return fetch(dataUrl).then(function (r) { return r.blob(); }).then(function (blob) {
+      return db.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' });
+    }).then(function (res) {
+      if (res.error) throw res.error;
+      return db.storage.from('photos').getPublicUrl(path).data.publicUrl;
+    });
+  }
+  // Supprime le fichier d'une photo qu'on a stockée nous-mêmes (sans bloquer si ça échoue).
+  function removeStoredPhoto(url) {
+    var marker = '/storage/v1/object/public/photos/';
+    var i = url ? url.indexOf(marker) : -1;
+    if (i > -1) db.storage.from('photos').remove([decodeURIComponent(url.slice(i + marker.length))]);
+  }
+
+  function compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var img = new Image();
+        img.onload = function () {
+          // 1600 px : net en plein écran sur le bandeau, ~300-500 Ko par photo.
+          // ponytail: le stockage navigateur (~5 Mo partagés) reste le plafond, à remplacer par la base de données de l'appli mobile.
+          var maxW = 1600;
+          var scale = Math.min(1, maxW / img.width);
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = function () { reject(new Error('image invalide')); };
+        img.src = e.target.result;
+      };
+      reader.onerror = function () { reject(new Error('lecture échouée')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Cache des coordonnées de villes, propre à chaque appareil (simple confort, peut être vide).
+  function loadCoordCache() {
+    var cache = {};
+    try { cache = JSON.parse(localStorage.getItem(COORD_CACHE_KEY)) || {}; } catch (e) {}
+    return Object.assign({}, DEFAULT_COORDS, cache);
+  }
+  function saveCoordCache() { try { localStorage.setItem(COORD_CACHE_KEY, JSON.stringify(cityCoords)); } catch (e) {} }
+
+  function computeResult(h) {
+    var pool = Number(h.pool), service = Number(h.service), location = Number(h.location),
+        food = Number(h.food), bedroom = Number(h.bedroom);
+    var avg = (pool + service + location + food + bedroom) / 5;
+    return h.adultOnly === 'Y' ? 1.02 * avg : avg;
+  }
+  function fmt(n) { return (Math.round(n * 1000) / 1000).toString(); }
+  function hashStr(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+  function fallbackPhotoFor(h) { return FALLBACK_PHOTOS[hashStr(h.name || 'x') % FALLBACK_PHOTOS.length]; }
+  function photoOf(h) { return h.photo && h.photo.trim() ? h.photo.trim() : fallbackPhotoFor(h); }
+  function escJs(s) { return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  // Argument texte d'un onclick="fn('...')" : échappé pour JS puis pour l'attribut HTML.
+  function jsArg(s) { return escHtml("'" + escJs(s) + "'"); }
+
+  function scoreWord(r) {
+    if (r >= 9) return 'Fabuleux';
+    if (r >= 8) return 'Excellent';
+    if (r >= 7) return 'Très bien';
+    if (r >= 6) return 'Bien';
+    return 'Correct';
+  }
+
+  function deriveTags(h) {
+    var tags = [];
+    if (h.adultOnly === 'Y' && Number(h.pool) >= 8.5) tags.push('Idéal pour : Retraite en couple');
+    else if (Number(h.location) >= 9) tags.push('Idéal pour : Tout faire à pied');
+    else if (Number(h.food) >= 9 && Number(h.service) >= 9) tags.push('Idéal pour : Gastronomie & Luxe');
+    else if (Number(h.pool) >= 9) tags.push('Idéal pour : Farniente total');
+    
+    if (Number(h.pool) >= 8) tags.push('Belle piscine');
+    if (Number(h.location) >= 8) tags.push('Emplacement top');
+    if (Number(h.food) >= 8) tags.push('Bonne table');
+    if (Number(h.bedroom) >= 8) tags.push('Chambre confort');
+    if (Number(h.service) >= 8) tags.push('Service au top');
+    if (h.adultOnly === 'Y') tags.push('Adultes seulement');
+    return tags.slice(0, 3);
+  }
+
+  var activeFilters = { search: '', adults: false, topScore: false };
+
+  function rankAllHotels() {
+    var withResults = hotels.map(function (h) { return Object.assign({}, h, { result: computeResult(h) }); });
+    withResults.sort(function (a, b) { return b.result - a.result; });
+    var ranks = [];
+    withResults.forEach(function (h, i) {
+      ranks.push(i > 0 && Math.abs(h.result - withResults[i - 1].result) < 1e-9 ? ranks[i - 1] : i + 1);
+    });
+    withResults.forEach(function (h, i) { h.rank = ranks[i]; });
+    return withResults;
+  }
+
+  function rankedHotels() {
+    // Apply Filters
+    return rankAllHotels().filter(function(h) {
+      if (activeFilters.adults && h.adultOnly !== 'Y') return false;
+      if (activeFilters.topScore && h.result < 8.5) return false;
+      if (activeFilters.search) {
+        var s = activeFilters.search.toLowerCase();
+        if (h.name.toLowerCase().indexOf(s) === -1 && h.city.toLowerCase().indexOf(s) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  // Empreinte radar : 5 branches (les 5 critères) dessinées en SVG pur.
+  // Donne à chaque hôtel une silhouette reconnaissable — un profil déséquilibré
+  // se repère d'un coup d'œil là où cinq barres demandent une lecture.
+  var RADAR_KEYS = ['pool', 'service', 'location', 'food', 'bedroom'];
+  function radarPoints(h, ratio) {
+    return RADAR_KEYS.map(function (k, i) {
+      var v = Math.max(0, Math.min(10, Number(h[k]) || 0)) / 10;
+      var a = (-90 + i * 72) * Math.PI / 180;
+      var r = 38 * (ratio === undefined ? v : ratio);
+      return (50 + r * Math.cos(a)).toFixed(1) + ',' + (50 + r * Math.sin(a)).toFixed(1);
+    }).join(' ');
+  }
+  var RADAR_LABELS = ['Piscine', 'Service', 'Lieu', 'Repas', 'Chambre'];
+  // h2 optionnel : superpose un second hôtel (mode Versus).
+  function radarSvg(h, h2) {
+    var rings = [0.34, 0.67, 1].map(function (r) {
+      return '<polygon points="' + radarPoints(h, r) + '" class="rd-ring"/>';
+    }).join('');
+    var axes = RADAR_KEYS.map(function (k, i) {
+      var a = (-90 + i * 72) * Math.PI / 180;
+      return '<line x1="50" y1="50" x2="' + (50 + 38 * Math.cos(a)).toFixed(1) +
+             '" y2="' + (50 + 38 * Math.sin(a)).toFixed(1) + '" class="rd-axis"/>';
+    }).join('');
+    var labels = RADAR_LABELS.map(function (label, i) {
+      var a = (-90 + i * 72) * Math.PI / 180;
+      var cos = Math.cos(a), sin = Math.sin(a);
+      var lx = (50 + 44 * cos).toFixed(1);
+      var ly = (50 + 44 * sin).toFixed(1);
+      var anchor = cos > 0.1 ? 'start' : (cos < -0.1 ? 'end' : 'middle');
+      var dy = sin > 0.1 ? '0.5em' : (sin < -0.1 ? '-0.2em' : '0.3em');
+      return '<text x="' + lx + '" y="' + ly + '" dy="' + dy + '" class="rd-label" text-anchor="' + anchor + '">' + label + '</text>';
+    }).join('');
+    var shapes = h2 ?
+      '<polygon points="' + radarPoints(h) + '" class="vs-radar-1"/><polygon points="' + radarPoints(h2) + '" class="vs-radar-2"/>' :
+      '<polygon points="' + radarPoints(h) + '" class="rd-shape"/>';
+    return '<svg class="radar" viewBox="-20 -20 140 140" aria-hidden="true">' +
+      rings + axes + labels + shapes +
+    '</svg>';
+  }
+
+  function critRow(label, v) {
+    var pct = Math.max(0, Math.min(10, Number(v) || 0)) * 10;
+    return '<div><span>' + label + '</span><span>' + fmt(v) + '</span>' +
+           '<i class="crit-bar" style="--w:' + pct + '%"></i></div>';
+  }
+
+  function hotelCardHtml(h, withId) {
+    var photo = photoOf(h);
+    var fallback2 = fallbackPhotoFor(h);
+    var idAttr = withId ? ' id="card-' + escHtml(h.id) + '"' : '';
+    var tags = deriveTags(h).map(function (t) { return '<span class="hc-tag">' + escHtml(t) + '</span>'; }).join('');
+    return (
+      '<div class="hotel-card" data-city="' + escHtml(h.city) + '"' + idAttr + '>' +
+        '<div class="hc-media">' +
+          '<div class="vs-checkbox-wrap"><input type="checkbox" class="vs-checkbox" data-id="' + escHtml(h.id) + '" title="Comparer"' + (vsSelected.indexOf(h.id) > -1 ? ' checked' : '') + '></div>' +
+          '<img src="' + escHtml(photo) + '" alt="" ' +
+            'onerror="if(this.src!==\'' + escJs(fallback2) + '\'){this.src=\'' + escJs(fallback2) + '\';}else{this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';}">' +
+          '<div class="emoji-fallback">' + ICON_PHOTO + '</div>' +
+          '<div class="hc-ribbon' + (h.rank <= 3 ? ' rank-' + h.rank : '') + '">' +
+            '<span>#' + h.rank + '</span>' +
+            (h.rank === 1 ? '<span class="hc-ribbon-label">Top choix</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="hc-body">' +
+          '<div class="hc-score"><span class="hc-score-num tabular">' + fmt(h.result) + '</span><span class="hc-score-word">' + scoreWord(h.result) + '</span></div>' +
+          '<h3 class="hc-name">' + (h.website && h.website.trim() ?
+            '<a href="' + escHtml(h.website.trim()) + '" target="_blank" rel="noopener noreferrer">' + escHtml(h.name) + '</a>' :
+            escHtml(h.name)) + '</h3>' +
+          '<div class="hc-city">' + ICON_PIN + ' ' + escHtml(h.city) + '</div>' +
+          (tags ? '<div class="hc-tags">' + tags + '</div>' : '') +
+          ((h.pointFort && h.pointFort.trim()) || (h.pointFaible && h.pointFaible.trim()) ?
+            '<div class="hc-facts">' +
+              (h.pointFort && h.pointFort.trim() ? '<div class="hc-fact"><span class="hc-fact-label">👍</span><span>' + escHtml(h.pointFort.trim()) + '</span></div>' : '') +
+              (h.pointFaible && h.pointFaible.trim() ? '<div class="hc-fact"><span class="hc-fact-label">👎</span><span>' + escHtml(h.pointFaible.trim()) + '</span></div>' : '') +
+            '</div>' : '') +
+          '<details class="hc-manifest"><summary>Voir le détail des critères</summary>' +
+            '<div class="crit-panel">' +
+              '<div class="radar-wrap">' + radarSvg(h) + '</div>' +
+              '<div class="crit-grid">' +
+                critRow('Piscine', h.pool) +
+                critRow('Service', h.service) +
+                critRow('Emplacement', h.location) +
+                critRow('Restauration', h.food) +
+                critRow('Chambre', h.bedroom) +
+              '</div>' +
+            '</div>' +
+          '</details>' +
+          '<div class="hc-bottom">' +
+            '<div class="hc-secondary edit-only">' +
+              '<button onclick="editHotel(' + jsArg(h.id) + ')">' + ICON_PENCIL + ' Modifier</button>' +
+              '<button class="del" onclick="deleteHotel(' + jsArg(h.id) + ')">' + ICON_TRASH + ' Supprimer</button>' +
+            '</div>' +
+            '<button class="hc-cta" onclick="focusCityOnMap(' + jsArg(h.city) + ')">' + ICON_PIN + ' Voir sur la carte</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function reduceMotion() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+
+  // Position visuelle : le 1er au centre, le 2e à gauche, le 3e à droite.
+  var POD_SLOT = ['pod-c', 'pod-l', 'pod-r'];
+
+  function podiumTileHtml(h, i) {
+    var photo = photoOf(h);
+    var fallback2 = fallbackPhotoFor(h);
+    return (
+      '<button type="button" class="pod ' + POD_SLOT[i] + ' pod-' + (h.rank <= 3 ? h.rank : 3) + '"' +
+        ' data-city="' + escHtml(h.city) + '"' +
+        ' onclick="openStory(' + jsArg(h.id) + ')"' +
+        ' aria-label="' + escHtml('#' + h.rank + ' ' + h.name + ', ' + h.city + ', note ' + fmt(h.result)) + '">' +
+        '<img src="' + escHtml(photo) + '" alt="" ' +
+          'onerror="if(this.src!==\'' + escJs(fallback2) + '\'){this.src=\'' + escJs(fallback2) + '\';}">' +
+        '<div class="pod-scrim"></div>' +
+        '<div class="pod-medal">' + h.rank + '</div>' +
+        '<div class="pod-body">' +
+          '<div class="pod-score">' + fmt(h.result) + '</div>' +
+          '<div class="pod-name">' + escHtml(h.name) + '</div>' +
+          '<div class="pod-city">' + ICON_PIN + ' ' + escHtml(h.city) + '</div>' +
+        '</div>' +
+      '</button>'
+    );
+  }
+
+  function renderPodium(list) {
+    var wrap = document.getElementById('podium');
+    wrap.innerHTML = list.slice(0, 3).map(podiumTileHtml).join('');
+    // Le podium ne s'anime qu'au tout premier rendu, sinon le top 3 reclignote à chaque modification.
+    if (didFirstRender || reduceMotion()) return;
+    Array.prototype.forEach.call(wrap.children, function (el, i) {
+      el.style.animationDelay = (i * 45) + 'ms';
+      el.classList.add('card-in');
+    });
+  }
+
+  function renderHero(list) {
+    var h = list[0];
+    var wrap = document.getElementById('heroCredit');
+    if (!h) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+    var img = document.getElementById('heroPhotoImg');
+    var photo = photoOf(h);
+    var fallback2 = fallbackPhotoFor(h);
+    img.onerror = function () { if (img.src !== fallback2) img.src = fallback2; };
+    img.src = photo;
+    img.alt = h.name;
+    document.getElementById('heroName').textContent = h.name;
+    document.getElementById('heroCity').textContent = h.city;
+  }
+
+  function renderCards(list) {
+    var wrap = document.getElementById('cards');
+
+    var firstRects = {};
+    Array.prototype.forEach.call(wrap.children, function (el) {
+      if (el.id) firstRects[el.id] = el.getBoundingClientRect();
+    });
+
+    document.getElementById('countLabel').textContent = list.length + ' hôtel' + (list.length > 1 ? 's' : '');
+
+    if (!list.length) {
+      wrap.innerHTML = loading ? '<div class="empty-state">Chargement du classement…</div>' : loadError ?
+        '<div class="empty-state"><strong>Oups</strong>' + escHtml(loadError) + '</div>' :
+        '<div class="empty-state"><strong>Aucun hôtel</strong>' +
+          (canEdit ? 'Ajoute un hôtel avec le bouton + pour démarrer le classement.' : 'Le classement est encore vide.') + '</div>';
+      setupCardObserver();
+      return;
+    }
+
+    wrap.innerHTML = list.map(function (h) { return hotelCardHtml(h, true); }).join('');
+
+    // Carte déjà présente avant -> elle glisse à sa nouvelle place (FLIP).
+    // Carte nouvelle (ou tout premier rendu) -> elle apparaît en fondu, décalée.
+    var stagger = 0;
+    Array.prototype.forEach.call(wrap.children, function (el) {
+      var first = firstRects[el.id];
+      if (!first) {
+        if (reduceMotion()) return;
+        el.style.animationDelay = (stagger++ * 45) + 'ms';
+        el.classList.add('card-in');
+        return;
+      }
+      var last = el.getBoundingClientRect();
+      var dy = first.top - last.top;
+      if (Math.abs(dy) < 1 || reduceMotion()) return;
+      el.style.transition = 'none';
+      el.style.transform = 'translateY(' + dy + 'px)';
+      requestAnimationFrame(function () {
+        el.style.transition = 'transform .5s cubic-bezier(.16,1,.3,1)';
+        el.style.transform = '';
+      });
+    });
+
+    // Les fiches sont recréées à chaque rendu : l'observateur doit les reprendre.
+    setupCardObserver();
+  }
+
+  function pinIcon(count) {
+    return L.divIcon({
+      html: '<div class="map-pin">' + count + '</div>',
+      className: '', iconSize: [26, 26], iconAnchor: [13, 24], popupAnchor: [0, -22]
+    });
+  }
+
+  function renderMap(list) {
+    if (!map) return;
+    markersLayer.clearLayers();
+    cityMarkers = {};
+    var byCity = {};
+    list.forEach(function (h) {
+      var key = h.city.trim().toLowerCase();
+      (byCity[key] = byCity[key] || { city: h.city, hotels: [] }).hotels.push(h);
+    });
+
+    var bounds = [];
+    var pending = [];
+    Object.keys(byCity).forEach(function (key) {
+      var group = byCity[key];
+      var coord = cityCoords[key];
+      if (!coord) { pending.push(key); return; }
+      addCityMarker(key, coord, group);
+      bounds.push(coord);
+    });
+    // On ne recadre que si l'ensemble des villes a changé (sinon la carte saute à chaque lettre tapée).
+    var sameCities = JSON.stringify(bounds) === JSON.stringify(overviewBounds);
+    overviewBounds = bounds.slice();
+    if (bounds.length && !sameCities) map.fitBounds(bounds, { padding: [30, 30], maxZoom: 6 });
+
+    pending.forEach(function (key) {
+      geocodeCity(byCity[key].city).then(function (coord) {
+        if (!coord) return;
+        cityCoords[key] = coord;
+        saveCoordCache();
+        addCityMarker(key, coord, byCity[key]);
+        var pts = markersLayer.getLayers().map(function (l) { return l.getLatLng(); });
+        if (pts.length) map.fitBounds(pts, { padding: [30, 30], maxZoom: 6 });
+      });
+    });
+  }
+
+  function addCityMarker(key, coord, group) {
+    group.hotels.sort(function (a, b) { return a.rank - b.rank; });
+    var popupHtml = '<b>' + escHtml(group.city) + '</b><div style="margin-top:6px">' +
+      group.hotels.map(function (h) {
+        return '<div class="popup-hotel"><a href="#" onclick="scrollToCard(' + jsArg(h.id) + ');return false;">#' + h.rank + ' ' + escHtml(h.name) + '</a><span>' + fmt(h.result) + '</span></div>';
+      }).join('') + '</div>';
+    var marker = L.marker(coord, { icon: pinIcon(group.hotels.length) }).bindPopup(popupHtml);
+    marker._cityKey = key;
+    markersLayer.addLayer(marker);
+    cityMarkers[key] = marker;
+  }
+
+  function geocodeCity(city) {
+    return fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(city))
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return (data && data[0]) ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null; })
+      .catch(function () { return null; });
+  }
+
+  window.focusCityOnMap = function (city) {
+    var key = city.trim().toLowerCase();
+    var coord = cityCoords[key];
+    if (!map || !coord) return;
+    mapLockUntil = Date.now() + 2500;
+    map.setView(coord, 8, { animate: true });
+    markersLayer.eachLayer(function (m) { if (m._cityKey === key) m.openPopup(); });
+    document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  window.scrollToCard = function (id) {
+    var el = document.getElementById('card-' + id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('highlight');
+    setTimeout(function () { el.classList.remove('highlight'); }, 1600);
+  };
+
+  window.deleteHotel = function (id) {
+    var h = hotels.find(function (x) { return x.id === id; });
+    if (!h || !confirm('Supprimer "' + h.name + '" ?')) return;
+    // .select() renvoie les lignes réellement supprimées : 0 ligne = refusé par la base.
+    db.from('places').delete().eq('id', id).select('id').then(function (res) {
+      if (res.error || !res.data.length) { alert(WRITE_FAILED_MSG); return; }
+      removeStoredPhoto(h.photo);
+      return loadHotels();
+    });
+  };
+  var WRITE_FAILED_MSG = 'Rien n\'a été enregistré : connexion perdue ou session expirée. Reconnecte-toi puis réessaie.';
+
+  window.editHotel = function (id) {
+    var h = hotels.find(function (x) { return x.id === id; });
+    if (!h) return;
+    openModal(h);
+  };
+
+  function renderAll() {
+    // Un hôtel supprimé ne doit pas rester sélectionné pour le Versus.
+    vsSelected = vsSelected.filter(function (id) { return hotels.some(function (h) { return h.id === id; }); });
+    var list = rankedHotels();
+    renderHero(list);
+    renderPodium(list);
+    renderCards(list);
+    renderMap(list);
+    didFirstRender = true;
+    updateVersusFab();
+  }
+
+  /* ---------- Theme Toggle ---------- */
+  document.getElementById('themeBtn').addEventListener('click', function() {
+    var dark = document.documentElement.classList.toggle('theme-dark');
+    try { localStorage.setItem('hotelRankings.theme', dark ? 'dark' : 'light'); } catch (e) {}
+  });
+
+  /* ---------- Filters ---------- */
+  document.getElementById('searchInput').addEventListener('input', function(e) {
+    activeFilters.search = e.target.value;
+    renderAll();
+  });
+  document.getElementById('filterAdults').addEventListener('click', function() {
+    activeFilters.adults = !activeFilters.adults;
+    this.classList.toggle('active', activeFilters.adults);
+    renderAll();
+  });
+  document.getElementById('filterTopScore').addEventListener('click', function() {
+    activeFilters.topScore = !activeFilters.topScore;
+    this.classList.toggle('active', activeFilters.topScore);
+    renderAll();
+  });
+
+  /* ---------- Story Mode ---------- */
+  window.openStory = function(id) {
+    var h = rankAllHotels().find(function(x) { return x.id === id; });
+    if (!h) return;
+
+    var img = document.getElementById('storyImg');
+    var fallback2 = fallbackPhotoFor(h);
+    img.onerror = function () { if (img.src !== fallback2) img.src = fallback2; };
+    img.src = photoOf(h);
+    document.getElementById('storyRank').textContent = '#' + h.rank;
+    document.getElementById('storyName').textContent = h.name;
+    document.getElementById('storyCity').innerHTML = ICON_PIN + ' ' + escHtml(h.city);
+    document.getElementById('storyRadar').innerHTML = radarSvg(h);
+    document.getElementById('storyTags').innerHTML = deriveTags(h).map(function(t) { return '<span class="hc-tag">' + escHtml(t) + '</span>'; }).join('');
+    
+    document.getElementById('storyModalOverlay').classList.add('open');
+  };
+  document.getElementById('storyClose').addEventListener('click', closeOverlays);
+
+  /* ---------- Versus Mode ---------- */
+  var vsSelected = [];
+  document.getElementById('cards').addEventListener('change', function(e) {
+    if (!e.target.classList.contains('vs-checkbox')) return;
+    var id = e.target.getAttribute('data-id');
+    if (e.target.checked) {
+      if (vsSelected.length >= 2) {
+        e.target.checked = false;
+        alert("Tu ne peux comparer que 2 hôtels à la fois !");
+        return;
+      }
+      vsSelected.push(id);
+    } else {
+      vsSelected = vsSelected.filter(function(x) { return x !== id; });
+    }
+    updateVersusFab();
+  });
+
+  function updateVersusFab() {
+    var fab = document.getElementById('fabVs');
+    if (vsSelected.length === 2) fab.classList.add('show');
+    else fab.classList.remove('show');
+  }
+
+  document.getElementById('fabVs').addEventListener('click', function() {
+    if (vsSelected.length !== 2) return;
+    var h1 = hotels.find(function(x) { return x.id === vsSelected[0]; });
+    var h2 = hotels.find(function(x) { return x.id === vsSelected[1]; });
+    if (!h1 || !h2) return;
+    
+    function side(h, color) {
+      var fb = fallbackPhotoFor(h);
+      return '<img src="' + escHtml(photoOf(h)) + '" alt="" onerror="if(this.src!==' + jsArg(fb) + ')this.src=' + jsArg(fb) + '">' +
+        '<div class="vs-side-name" style="color:' + color + '">' + escHtml(h.name) + '</div>';
+    }
+    document.getElementById('vsLeft').innerHTML = side(h1, 'var(--accent)');
+    document.getElementById('vsRight').innerHTML = side(h2, '#3b82f6');
+    document.getElementById('vsRadarWrap').innerHTML = radarSvg(h1, h2);
+    document.getElementById('versusModalOverlay').classList.add('open');
+  });
+
+  document.getElementById('versusClose').addEventListener('click', closeOverlays);
+
+  /* ---------- Modal ---------- */
+  var overlay = document.getElementById('modalOverlay');
+  var form = document.getElementById('hotelForm');
+  var sliders = ['pool', 'service', 'location', 'food', 'bedroom'];
+
+  sliders.forEach(function (name) {
+    var input = document.getElementById('f-' + name);
+    var out = document.getElementById('o-' + name);
+    input.addEventListener('input', function () { out.textContent = input.value; });
+  });
+  document.getElementById('f-adult').addEventListener('change', function (e) {
+    document.getElementById('adultLabel').textContent = e.target.checked ? 'Oui' : 'Non';
+  });
+
+  var photoThumb = document.getElementById('photoThumb');
+  var removePhotoBtn = document.getElementById('removePhotoBtn');
+  var photoFileInput = document.getElementById('f-photo-file');
+
+  function setPhotoPreview(dataUrlOrEmpty) {
+    document.getElementById('f-photo').value = dataUrlOrEmpty || '';
+    if (dataUrlOrEmpty) {
+      photoThumb.src = dataUrlOrEmpty;
+      photoThumb.classList.add('show');
+      removePhotoBtn.classList.add('show');
+    } else {
+      photoThumb.src = '';
+      photoThumb.classList.remove('show');
+      removePhotoBtn.classList.remove('show');
+    }
+  }
+
+  photoFileInput.addEventListener('change', function () {
+    var file = photoFileInput.files[0];
+    if (!file) return;
+    compressImage(file).then(setPhotoPreview).catch(function () {
+      alert('Impossible de lire cette image, essaie un autre fichier.');
+    });
+  });
+  removePhotoBtn.addEventListener('click', function () {
+    photoFileInput.value = '';
+    setPhotoPreview('');
+  });
+
+  function openModal(hotel) {
+    document.getElementById('modalTitle').textContent = hotel ? 'Modifier l\'hôtel' : 'Ajouter un hôtel';
+    document.getElementById('submitBtn').textContent = hotel ? 'Enregistrer' : 'Ajouter';
+    document.getElementById('formStatus').textContent = '';
+    document.getElementById('f-id').value = hotel ? hotel.id : '';
+    document.getElementById('f-name').value = hotel ? hotel.name : '';
+    document.getElementById('f-city').value = hotel ? hotel.city : '';
+    document.getElementById('f-website').value = hotel ? (hotel.website || '') : '';
+    document.getElementById('f-point-fort').value = hotel ? (hotel.pointFort || '') : '';
+    document.getElementById('f-point-faible').value = hotel ? (hotel.pointFaible || '') : '';
+    photoFileInput.value = '';
+    setPhotoPreview(hotel ? (hotel.photo || '') : '');
+    sliders.forEach(function (name) {
+      var v = hotel ? hotel[name] : 7;
+      document.getElementById('f-' + name).value = v;
+      document.getElementById('o-' + name).textContent = v;
+    });
+    var adult = hotel ? hotel.adultOnly === 'Y' : false;
+    document.getElementById('f-adult').checked = adult;
+    document.getElementById('adultLabel').textContent = adult ? 'Oui' : 'Non';
+    overlay.classList.add('open');
+    document.getElementById('f-name').focus();
+  }
+  function closeModal() { overlay.classList.remove('open'); }
+  function closeOverlays() {
+    [].forEach.call(document.querySelectorAll('.modal-overlay.open'), function (o) { o.classList.remove('open'); });
+  }
+
+  document.getElementById('fabAdd').addEventListener('click', function () { openModal(null); });
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  // Clic sur le fond sombre ou Échap : ferme n'importe quelle fenêtre ouverte.
+  [].forEach.call(document.querySelectorAll('.modal-overlay'), function (o) {
+    o.addEventListener('click', function (e) { if (e.target === o) o.classList.remove('open'); });
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOverlays(); });
+
+  function clampScore(v) { var n = Number(v); return isNaN(n) ? 0 : Math.min(10, Math.max(0, n)); }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = document.getElementById('f-name').value.trim();
+    var city = document.getElementById('f-city').value.trim();
+    var status = document.getElementById('formStatus');
+    if (!name || !city) { status.textContent = 'Le nom et la ville sont requis.'; status.className = 'status err'; return; }
+
+    var id = document.getElementById('f-id').value;
+    var data = {
+      name: name,
+      city: city,
+      website: document.getElementById('f-website').value.trim(),
+      pointFort: document.getElementById('f-point-fort').value.trim(),
+      pointFaible: document.getElementById('f-point-faible').value.trim(),
+      photo: document.getElementById('f-photo').value.trim(),
+      adultOnly: document.getElementById('f-adult').checked ? 'Y' : 'N'
+    };
+    sliders.forEach(function (n) { data[n] = clampScore(document.getElementById('f-' + n).value); });
+
+    var old = id ? hotels.find(function (h) { return h.id === id; }) : null;
+    var submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    status.textContent = 'Enregistrement…'; status.className = 'status';
+
+    // Nouvelle photo choisie = data URL à envoyer d'abord dans le dossier "photos".
+    var photoReady = /^data:/.test(data.photo) ? uploadPhoto(data.photo) : Promise.resolve(data.photo);
+    photoReady.then(function (photoUrl) {
+      data.photo = photoUrl;
+      var row = toRow(data);
+      var q = id ?
+        db.from('places').update(Object.assign(row, { updated_at: new Date().toISOString() })).eq('id', id) :
+        db.from('places').insert(row);
+      return q.select('id');
+    }).then(function (res) {
+      if (res.error || !res.data.length) throw res.error || new Error('refusé');
+      if (old && old.photo !== data.photo) removeStoredPhoto(old.photo);
+      var newId = res.data[0].id;
+      closeModal();
+      return loadHotels().then(function () {
+        if (id) return;
+        var rankedH = rankAllHotels().find(function (x) { return x.id === newId; });
+        if (rankedH) {
+          document.getElementById('announceBtn').setAttribute('data-id', newId);
+          playAnnouncementSequence(rankedH);
+        }
+      });
+    }).catch(function () {
+      status.textContent = WRITE_FAILED_MSG; status.className = 'status err';
+    }).then(function () { submitBtn.disabled = false; });
+  });
+
+  /* ---------- Cinematic Announcement ---------- */
+  function playAnnouncementSequence(hotel) {
+    var overlay = document.getElementById('announcementModalOverlay');
+    overlay.classList.add('open');
+    
+    document.getElementById('announcePhase1').style.display = 'flex';
+    document.getElementById('announcePhase1').style.opacity = '1';
+    document.getElementById('announcePhase2').style.display = 'none';
+    document.getElementById('announcePhase2').classList.remove('fadeIn');
+    document.getElementById('announceRankStamp').classList.remove('stamp-in');
+    document.querySelector('.announcement-bg-wrap').classList.remove('show');
+    
+    document.getElementById('announceImg').src = photoOf(hotel);
+    document.getElementById('announceName').textContent = hotel.name;
+    document.getElementById('announceRankStamp').textContent = '#' + hotel.rank;
+    
+    if (hotel.rank <= 3) {
+      document.getElementById('announceHeader').innerHTML = "INCROYABLE !<br>Nouvel Entrant sur le Podium !";
+      document.getElementById('announceRankStamp').style.color = hotel.rank === 1 ? 'var(--gold)' : (hotel.rank === 2 ? 'var(--silver)' : 'var(--bronze)');
+    } else {
+      document.getElementById('announceHeader').innerHTML = "Nouvel Entrant !";
+      document.getElementById('announceRankStamp').style.color = '#fff';
+    }
+    
+    document.getElementById('announceRadarWrap').innerHTML = radarSvg(hotel);
+    
+    // Suspense phase
+    setTimeout(function() {
+      document.getElementById('announcePhase1').style.opacity = '0';
+      setTimeout(function() {
+        document.getElementById('announcePhase1').style.display = 'none';
+        document.getElementById('announcePhase2').style.display = 'flex';
+        document.getElementById('announcePhase2').classList.add('fadeIn');
+        document.querySelector('.announcement-bg-wrap').classList.add('show');
+        
+        setTimeout(function() {
+          document.getElementById('announceRankStamp').classList.add('stamp-in');
+          if (hotel.rank <= 3) fireConfetti();
+        }, 1200);
+      }, 500);
+    }, 1500);
+  }
+  
+  document.getElementById('announceBtn').addEventListener('click', function() {
+    document.getElementById('announcementModalOverlay').classList.remove('open');
+    var hId = this.getAttribute('data-id');
+    setTimeout(function() { scrollToCard(hId); }, 400);
+  });
+
+  /* Simple Confetti (Canvas) */
+  var confettiCtx = document.getElementById('confettiCanvas').getContext('2d');
+  var confettis = [];
+  function fireConfetti() {
+    var colors = ['#e0b13a', '#ff6600', '#ffffff', '#b9bec4'];
+    for (var i = 0; i < 150; i++) {
+      confettis.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight * 0.2 - 50,
+        r: Math.random() * 6 + 2,
+        dx: Math.random() * 4 - 2,
+        dy: Math.random() * 5 + 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        tilt: Math.random() * 10
+      });
+    }
+    animateConfetti();
+  }
+  function animateConfetti() {
+    if (confettis.length === 0) return;
+    requestAnimationFrame(animateConfetti);
+    confettiCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    confettis.forEach(function(c) {
+      c.y += c.dy;
+      c.x += Math.sin(c.tilt) * 2;
+      c.tilt += 0.1;
+      confettiCtx.beginPath();
+      confettiCtx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      confettiCtx.fillStyle = c.color;
+      confettiCtx.fill();
+    });
+    confettis = confettis.filter(function(c) { return c.y <= window.innerHeight; });
+  }
+  function resizeCanvas() {
+    document.getElementById('confettiCanvas').width = window.innerWidth;
+    document.getElementById('confettiCanvas').height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  /* ---------- Connexion des éditeurs (email + mot de passe) ---------- */
+  // Pas de code par email : l'offre gratuite de Supabase n'envoie qu'aux membres de son équipe
+  // et interdit de modifier les modèles d'email ; un lien magique, lui, casse sur iPhone.
+  var loginOverlay = document.getElementById('loginModalOverlay');
+  var loginEmail = document.getElementById('loginEmail');
+  var loginPassword = document.getElementById('loginPassword');
+  var loginStatus = document.getElementById('loginStatus');
+  var loginSubmit = document.getElementById('loginSubmit');
+  var hasSession = false;
+
+  function openLogin() {
+    loginPassword.value = '';
+    loginStatus.textContent = ''; loginStatus.className = 'status';
+    loginOverlay.classList.add('open');
+    loginEmail.focus();
+  }
+  document.getElementById('loginClose').addEventListener('click', closeOverlays);
+  document.getElementById('authBtn').addEventListener('click', function () {
+    if (!db) { alert('Appli pas encore reliée à sa base de données.'); return; }
+    if (hasSession) { if (confirm('Se déconnecter ?')) db.auth.signOut(); return; }
+    openLogin();
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    loginSubmit.disabled = true;
+    db.auth.signInWithPassword({ email: loginEmail.value.trim().toLowerCase(), password: loginPassword.value }).then(function (res) {
+      if (res.error) throw res.error;
+      loginPassword.value = '';
+      loginOverlay.classList.remove('open');
+    }).catch(function () {
+      loginStatus.textContent = 'Email ou mot de passe incorrect, ou connexion perdue.';
+      loginStatus.className = 'status err';
+    }).then(function () { loginSubmit.disabled = false; });
+  });
+
+  // La base dit si ce compte est éditeur ; l'affichage suit.
+  var sessionUserId = null;
+  function applySession(session) {
+    var userId = session ? session.user.id : null;
+    if (userId === sessionUserId) return; // simple rafraîchissement du jeton
+    sessionUserId = userId;
+    hasSession = !!session;
+    document.getElementById('authLabel').textContent = session ? 'Déconnexion' : 'Connexion';
+    var check = session ? db.rpc('is_editor').then(function (res) { return res.data === true; }) : Promise.resolve(false);
+    check.then(function (ok) {
+      canEdit = ok;
+      document.body.classList.toggle('can-edit', ok);
+      if (session && !ok) alert('Ce compte n\'a pas les droits de modification.');
+      renderAll();
+    });
+  }
+  // setTimeout : Supabase déconseille d'appeler la base directement dans ce rappel.
+  if (db) db.auth.onAuthStateChange(function (event, session) { setTimeout(function () { applySession(session); }, 0); });
+
+  /* ---------- Import de la sauvegarde JSON de l'ancienne version ---------- */
+  var importBtn = document.getElementById('importBtn');
+  var importBtnHtml = importBtn.innerHTML;
+  importBtn.addEventListener('click', function () { document.getElementById('importFile').click(); });
+  document.getElementById('importFile').addEventListener('change', function () {
+    var file = this.files[0];
+    this.value = '';
+    if (!file) return;
+    function key(h) { return (String(h.name) + '|' + String(h.city)).trim().toLowerCase(); }
+    file.text().then(JSON.parse).then(function (list) {
+      if (!Array.isArray(list)) throw new Error('format');
+      var existing = hotels.map(key);
+      var todo = list.filter(function (h) { return h && h.name && h.city && existing.indexOf(key(h)) === -1; });
+      if (!todo.length) { alert('Rien à importer : tous ces hôtels sont déjà dans le classement.'); return; }
+      if (!confirm(todo.length + ' hôtel(s) à importer (' + (list.length - todo.length) + ' déjà présent(s)). Continuer ?')) return;
+      importBtn.disabled = true;
+      var done = 0;
+      // Un hôtel à la fois : les photos sont lourdes à envoyer.
+      return todo.reduce(function (p, h) {
+        return p.then(function () {
+          importBtn.textContent = 'Import ' + (++done) + '/' + todo.length;
+          var photo = /^data:/.test(h.photo || '') ? uploadPhoto(h.photo) : Promise.resolve(h.photo || '');
+          return photo.then(function (url) {
+            var row = toRow(Object.assign({}, h, { photo: url, name: String(h.name).trim(), city: String(h.city).trim() }));
+            return db.from('places').insert(row).then(function (res) { if (res.error) throw res.error; });
+          });
+        });
+      }, Promise.resolve()).then(function () { alert(todo.length + ' hôtel(s) importé(s).'); });
+    }).catch(function () {
+      alert('Import interrompu (fichier invalide ou connexion perdue). Ce qui est déjà importé est conservé : relance l\'import pour finir.');
+    }).then(function () {
+      importBtn.disabled = false;
+      importBtn.innerHTML = importBtnHtml;
+      return loadHotels();
+    });
+  });
+
+  // Retour sur l'appli : on recharge, pour voir ce que l'autre a modifié entre-temps.
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadHotels(); });
+
+  document.getElementById('exportBtn').addEventListener('click', function () {
+    var btn = this;
+    var list = rankedHotels();
+    function doExport() {
+      var rows = [['Name', 'Pool', 'Service', 'Location', 'Food', 'Bedroom', 'Adult only', 'Point fort', 'Point faible', 'Result', 'Ranking', 'City']];
+      list.forEach(function (h) {
+        rows.push([h.name, h.pool, h.service, h.location, h.food, h.bedroom, h.adultOnly, h.pointFort || '', h.pointFaible || '', Number(h.result.toFixed(3)), h.rank, h.city]);
+      });
+      var ws = XLSX.utils.aoa_to_sheet(rows);
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Comparison list');
+      XLSX.writeFile(wb, 'Hotel Rankings.xlsx');
+    }
+    if (window.XLSX) return doExport();
+    btn.disabled = true;
+    var original = btn.innerHTML;
+    btn.textContent = 'Chargement...';
+    var script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    script.onload = function () { btn.disabled = false; btn.innerHTML = original; doExport(); };
+    script.onerror = function () { btn.disabled = false; btn.innerHTML = original; alert('Impossible de charger la librairie Excel. Vérifie ta connexion internet.'); };
+    document.head.appendChild(script);
+  });
+
+  /* ---------- Init ---------- */
+  cityCoords = loadCoordCache();
+
+  map = L.map('map', { scrollWheelZoom: false }).setView([33, 5], 4);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri', maxZoom: 18
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+  setTimeout(function () { map.invalidateSize(); }, 200);
+
+  /* ---------- Mode vitrine : défilement lent de la page ---------- */
+  var SHOWCASE_PX_PER_FRAME = 0.6; // réglage vitesse : ~36 px/s en 60 Hz
+  var showcase = { on: false, pos: 0, idleUntil: 0, last: 0, mx: -1, my: -1, raf: 0 };
+
+  function showcaseStep(now) {
+    if (!showcase.on) return;
+    var dt = showcase.last ? Math.min(now - showcase.last, 50) : 16.67;
+    showcase.last = now;
+    if (Date.now() < showcase.idleUntil) {
+      showcase.pos = window.pageYOffset; // en pause : on reste synchro, pas de saut à la reprise
+    } else {
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      showcase.pos += SHOWCASE_PX_PER_FRAME * (dt / 16.67);
+      if (showcase.pos >= max) { window.scrollTo(0, max); toggleShowcase(false); return; }
+      window.scrollTo(0, showcase.pos);
+    }
+    showcase.raf = requestAnimationFrame(showcaseStep);
+  }
+
+  function toggleShowcase(on) {
+    showcase.on = on;
+    var b = document.getElementById('showcaseBtn');
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+    document.getElementById('showcaseLabel').textContent = on ? 'Pause vitrine' : 'Mode vitrine';
+    if (on) {
+      showcase.pos = window.pageYOffset; showcase.last = 0; showcase.idleUntil = 0;
+      showcase.raf = requestAnimationFrame(showcaseStep);
+    } else {
+      cancelAnimationFrame(showcase.raf);
+      setHotCity(null);
+    }
+  }
+
+  document.getElementById('showcaseBtn').addEventListener('click', function () { toggleShowcase(!showcase.on); });
+
+  function showcaseNudge() { if (showcase.on) showcase.idleUntil = Date.now() + 2000; }
+  ['wheel', 'keydown', 'touchstart'].forEach(function (ev) {
+    window.addEventListener(ev, showcaseNudge, { passive: true });
+  });
+  // Chrome émet un mousemove fantôme quand le contenu défile sous un curseur immobile :
+  // sans ce filtre de déplacement réel, la vitrine se mettrait en pause dès la 1re image.
+  window.addEventListener('mousemove', function (e) {
+    if (showcase.mx >= 0 && Math.abs(e.clientX - showcase.mx) + Math.abs(e.clientY - showcase.my) > 4) showcaseNudge();
+    showcase.mx = e.clientX; showcase.my = e.clientY;
+  }, { passive: true });
+
+  /* ---------- Survol d'une fiche -> marqueur allumé sur la carte ---------- */
+  var hotPin = null;
+  function setHotCity(city) {
+    var m = city ? cityMarkers[city.trim().toLowerCase()] : null;
+    // getElement() renvoie null tant que le marqueur n'est pas dessiné.
+    var el = (m && m.getElement()) || null;
+    if (el === hotPin) return;
+    if (hotPin) hotPin.classList.remove('pin-hot');
+    hotPin = el;
+    if (hotPin) hotPin.classList.add('pin-hot');
+  }
+  // Délégué sur document : mouseover/mouseout remontent (pas mouseenter/mouseleave),
+  // donc ça survit aux re-rendus qui recréent toutes les fiches.
+  document.addEventListener('mouseover', function (e) {
+    // Pendant le défilement auto, les fiches passent sous un curseur immobile :
+    // on n'allume rien tant que l'utilisateur n'a pas bougé lui-même.
+    if (showcase.on && Date.now() >= showcase.idleUntil) return;
+    var card = e.target.closest && e.target.closest('.hotel-card, .pod');
+    if (!card) return;
+    hoverCity = card.getAttribute('data-city');
+    setHotCity(hoverCity);
+  });
+  document.addEventListener('mouseout', function (e) {
+    var card = e.target.closest && e.target.closest('.hotel-card, .pod');
+    if (!card) return;
+    var to = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.hotel-card, .pod');
+    // En sortant, on ne coupe pas tout : on revient à l'hôtel que la lecture désigne.
+    if (to !== card) { hoverCity = null; setHotCity(scrollCity); }
+  });
+
+  /* ---------- La carte suit la lecture ---------- */
+  // La fiche qui traverse la bande centrale de l'écran pilote la carte.
+  function flyToCity(city) {
+    var coord = city ? cityCoords[city.trim().toLowerCase()] : null;
+    if (coord) {
+      if (reduceMotion()) map.setView(coord, 6, { animate: false });
+      else map.flyTo(coord, 6, { duration: .8 });
+    } else if (overviewBounds.length) {
+      // Plus aucune fiche au centre (on est remonté en haut) : retour à la vue d'ensemble.
+      var opts = { padding: [30, 30], maxZoom: 6 };
+      if (reduceMotion()) { opts.animate = false; map.fitBounds(overviewBounds, opts); }
+      else { opts.duration = .8; map.flyToBounds(overviewBounds, opts); }
+    }
+  }
+
+  function applyScrollCity(city) {
+    if (city === scrollCity) return;
+    scrollCity = city;
+    clearTimeout(flyTimer);
+    // Petit délai : en défilant vite on ne déclenche pas un vol par ville traversée.
+    flyTimer = setTimeout(function () {
+      if (Date.now() < mapLockUntil) return;
+      flyToCity(scrollCity);
+      if (!hoverCity) setHotCity(scrollCity);
+    }, 160);
+  }
+
+  function setupCardObserver() {
+    if (!('IntersectionObserver' in window)) return;
+    if (cardObserver) cardObserver.disconnect();
+    centeredCards = [];
+    // Sous 940px la carte n'est plus en vis-à-vis de la liste : le suivi n'a plus de sens.
+    if (window.matchMedia('(max-width: 940px)').matches) return;
+    cardObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        var i = centeredCards.indexOf(en.target);
+        if (en.isIntersecting && i === -1) centeredCards.push(en.target);
+        else if (!en.isIntersecting && i > -1) centeredCards.splice(i, 1);
+      });
+      centeredCards.sort(function (a, b) { return a.offsetTop - b.offsetTop; });
+      applyScrollCity(centeredCards.length ? centeredCards[0].getAttribute('data-city') : null);
+    }, { rootMargin: '-45% 0px -45% 0px', threshold: 0 });
+    [].forEach.call(document.querySelectorAll('#cards .hotel-card'), function (el) {
+      cardObserver.observe(el);
+    });
+  }
+
+  renderAll();
+  loadHotels();
+})();
+</script>
+
+</body>
+</html>

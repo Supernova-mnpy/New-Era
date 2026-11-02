@@ -1,0 +1,19 @@
+# L'offre gratuite de Supabase met la base en pause après 7 jours sans activité.
+# Ce robot GitHub lit une ligne tous les 3 jours pour la garder éveillée.
+# ponytail: GitHub coupe les tâches planifiées après 60 jours sans commit (il prévient par email ;
+# un clic sur "Enable workflow" dans l'onglet Actions suffit). Supabase payant supprime le besoin.
+name: Garder la base éveillée
+on:
+  schedule:
+    - cron: '0 6 */3 * *'
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lire une ligne de la base
+        run: |
+          URL=$(grep -o "SUPABASE_URL = '[^']*'" index.html | cut -d"'" -f2)
+          KEY=$(grep -o "SUPABASE_KEY = '[^']*'" index.html | cut -d"'" -f2)
+          curl -fsS "$URL/rest/v1/places?select=id&limit=1" -H "apikey: $KEY" > /dev/null
